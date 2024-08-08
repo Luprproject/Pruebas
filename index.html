@@ -1,1 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Juego de Obstáculos en Movimiento</title>
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+}
 
+#gameCanvas {
+  display: block;
+  margin: 0 auto;
+}
+
+#gameMenu, #gameOver {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  background-color: rgba(0,0,0,0.7);
+  padding: 20px;
+  border-radius: 10px;
+  color: white;
+}
+
+#gameMenu button, #gameOver button {
+  margin: 10px;
+  padding: 10px 20px;
+  font-size: 16px;
+}
+
+#levelDisplay, #scoreDisplay {
+  position: absolute;
+  top: 10px;
+  font-size: 18px;
+  padding: 5px;
+  border-radius: 5px;
+}
+
+#levelDisplay { left: 10px; }
+#scoreDisplay { right: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+<div id="levelDisplay">Nivel: 1</div>
+<div id="scoreDisplay">Puntuación: 0</div>
+
+<div id="gameMenu">
+  <h1>Juego de Obstáculos</h1>
+  <button id="startButton">Iniciar Juego</button>
+  <button id="instructionsButton">Instrucciones</button>
+</div>
+
+<div id="gameOver" style="display: none;">
+  <h1>Juego Terminado</h1>
+  <p id="finalScore"></p>
+  <button id="restartButton">Reiniciar Juego</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const levelDisplay = document.getElementById('levelDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const gameMenu = document.getElementById('gameMenu');
+const gameOverMenu = document.getElementById('gameOver');
+const startButton = document.getElementById('startButton');
+const instructionsButton = document.getElementById('instructionsButton');
+const restartButton = document.getElementById('restartButton');
+
+let gameState = 'menu';
+let currentLevel = 1;
+let score = 0;
+let obstacleSpeed = 5;
+let obstacleInterval = 1500;
+let colorTransition = 0; // 0 = white background, 1 = black background
+
+const player = {
+  x: 50,
+  y: canvas.height - 50,
+  width: 30,
+  height: 30,
+  jumping: false,
+  jumpStrength: 15,
+  gravity: 0.6,
+  velocity: 0
+};
+
+let obstacles = [];
+
+function getColor(startColor, endColor, progress) {
+  const r = Math.round(startColor[0] + (endColor[0] - startColor[0]) * progress);
+  const g = Math.round(startColor[1] + (endColor[1] - startColor[1]) * progress);
+  const b = Math.round(startColor[2] + (endColor[2] - startColor[2]) * progress);
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawPlayer() {
+  ctx.fillStyle = getColor([0, 0, 0], [255, 255, 255], colorTransition);
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+}
+
+function drawObstacles() {
+  ctx.fillStyle = getColor([0, 0, 0], [255, 255, 255], colorTransition);
+  obstacles.forEach(obstacle => {
+    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+  });
+}
+
+function update() {
+  if (gameState !== 'playing') return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Set background color
+  ctx.fillStyle = getColor([255, 255, 255], [0, 0, 0], colorTransition);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Update player position
+  if (player.jumping) {
+    player.velocity += player.gravity;
+    player.y += player.velocity;
+
+    if (player.y > canvas.height - player.height) {
+      player.y = canvas.height - player.height;
+      player.jumping = false;
+      player.velocity = 0;
+    }
+  }
+
+  // Update obstacles
+  obstacles.forEach((obstacle, index) => {
+    obstacle.x -= obstacleSpeed;
+    if (obstacle.x + obstacle.width < 0) {
+      obstacles.splice(index, 1);
+      score++;
+      scoreDisplay.textContent = `Puntuación: ${score}`;
+      
+      // Update color transition
+      colorTransition = (score % 20) / 20;
+      updateDisplayColors();
+    }
+
+    // Check collision
+    if (
+      player.x < obstacle.x + obstacle.width &&
+      player.x + player.width > obstacle.x &&
+      player.y < obstacle.y + obstacle.height &&
+      player.y + player.height > obstacle.y
+    ) {
+      gameOver();
+    }
+  });
+
+  drawPlayer();
+  drawObstacles();
+
+  // Level up
+  if (score > 0 && score % 10 === 0) {
+    levelUp();
+  }
+
+  requestAnimationFrame(update);
+}
+
+function spawnObstacle() {
+  if (gameState !== 'playing') return;
+
+  const obstacle = {
+    x: canvas.width,
+    y: canvas.height - 30,
+    width: 20,
+    height: 30
+  };
+
+  obstacles.push(obstacle);
+  setTimeout(spawnObstacle, obstacleInterval);
+}
+
+function jump() {
+  if (!player.jumping) {
+    player.jumping = true;
+    player.velocity = -player.jumpStrength;
+  }
+}
+
+function gameOver() {
+  gameState = 'over';
+  gameOverMenu.style.display = 'block';
+  document.getElementById('finalScore').textContent = `Puntuación final: ${score}`;
+}
+
+function startGame() {
+  gameState = 'playing';
+  gameMenu.style.display = 'none';
+  obstacles = [];
+  score = 0;
+  currentLevel = 1;
+  obstacleSpeed = 5;
+  obstacleInterval = 1500;
+  colorTransition = 0;
+  scoreDisplay.textContent = `Puntuación: ${score}`;
+  levelDisplay.textContent = `Nivel: ${currentLevel}`;
+  player.y = canvas.height - player.height;
+  updateDisplayColors();
+  spawnObstacle();
+  update();
+}
+
+startButton.addEventListener('click', startGame);
+restartButton.addEventListener('click', () => {
+  gameOverMenu.style.display = 'none';
+  startGame();
+});
+
+instructionsButton.addEventListener('click', () => {
+  alert('Presiona la barra espaciadora para saltar y evitar los obstáculos. La puntuación aumenta por cada obstáculo evitado. El juego se vuelve más difícil a medida que avanzas de nivel.');
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Space') {
+    if (gameState === 'playing') {
+      jump();
+    } else if (gameState === 'menu') {
+      startGame();
+    }
+  }
+});
+
+// Ajusta los colores de los displays según el progreso del color
+function updateDisplayColors() {
+  const textColor = getColor([0, 0, 0], [255, 255, 255], colorTransition);
+  const bgColor = `rgba(${255 - Math.round(255 * colorTransition)},${255 - Math.round(255 * colorTransition)},${255 - Math.round(255 * colorTransition)},0.5)`;
+  
+  levelDisplay.style.color = textColor;
+  levelDisplay.style.backgroundColor = bgColor;
+  scoreDisplay.style.color = textColor;
+  scoreDisplay.style.backgroundColor = bgColor;
+}
+
+// Función para subir de nivel
+function levelUp() {
+  currentLevel++;
+  levelDisplay.textContent = `Nivel: ${currentLevel}`;
+  obstacleSpeed += 0.5;
+  obstacleInterval = Math.max(obstacleInterval - 50, 500);
+}
+
+updateDisplayColors(); // Llama a esto al inicio para configurar los colores iniciales
+</script>
+
+</body>
+</html>
